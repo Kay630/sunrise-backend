@@ -15,15 +15,43 @@ const PORT = process.env.PORT || 5000;
 
 /* ─── CORS ───────────────────────────────────────────────── */
 /*
- * In production set FRONTEND_ORIGIN to the exact URL where the
- * school app is hosted (e.g. https://sunrise-school.vercel.app).
- * In development, '*' is fine for quick testing.
+ * Allow requests from:
+ * - Production frontend (FRONTEND_ORIGIN env var)
+ * - Local file testing (file://)
+ * - Localhost testing (http://localhost)
  */
-app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || '*',
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    // Allow production frontend
+    if (process.env.FRONTEND_ORIGIN && origin === process.env.FRONTEND_ORIGIN) {
+      return callback(null, true);
+    }
+    
+    // Allow localhost and file:// for testing
+    if (origin.startsWith('http://localhost') || 
+        origin.startsWith('file://') || 
+        origin.startsWith('http://127.0.0.1') ||
+        origin.startsWith('https://localhost')) {
+      return callback(null, true);
+    }
+    
+    // If no FRONTEND_ORIGIN is set, allow all origins (development mode)
+    if (!process.env.FRONTEND_ORIGIN) {
+      return callback(null, true);
+    }
+    
+    // Otherwise, deny
+    callback(new Error('Not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 
 /* ─── body parsing ───────────────────────────────────────── */
 app.use(express.json());
