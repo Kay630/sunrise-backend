@@ -7,6 +7,7 @@ const morgan     = require('morgan');
 
 const authRoutes = require('./routes/auth');
 const dataRoutes = require('./routes/data');
+const User       = require('./models/User');
 
 /* ─── app bootstrap ──────────────────────────────────────── */
 const app  = express();
@@ -50,11 +51,45 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Internal server error.' });
 });
 
-/* ─── MongoDB connection → listen ────────────────────────── */
+/* ─── Auto-seed admin account on first startup ────────────── */
+async function seedAdminIfNeeded() {
+  try {
+    const count = await User.countDocuments();
+    if (count > 0) {
+      console.log(`ℹ  ${count} user(s) already exist — skipping seed.`);
+      return;
+    }
+
+    const { ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME } = process.env;
+    if (!ADMIN_EMAIL || !ADMIN_PASSWORD || !ADMIN_NAME) {
+      console.warn('⚠  ADMIN_EMAIL, ADMIN_PASSWORD, and ADMIN_NAME not set — skipping admin seed.');
+      return;
+    }
+
+    await User.create({
+      name:     ADMIN_NAME,
+      email:    ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+      role:     'admin',
+      status:   'Active'
+    });
+
+    console.log(`✅  Admin account created: ${ADMIN_EMAIL}`);
+    console.log('⚠   Change the password immediately after your first login.');
+  } catch (err) {
+    console.error('❌  Admin seed failed:', err.message);
+  }
+}
+
+/* ─── MongoDB connection → seed → listen ────────────────── */
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('✔  MongoDB connected');
+    
+    // Auto-seed admin account if needed
+    await seedAdminIfNeeded();
+    
     app.listen(PORT, () => console.log(`✔  Server running on port ${PORT}`));
   })
   .catch(err => {
